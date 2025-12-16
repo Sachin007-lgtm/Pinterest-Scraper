@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "api": "node api.js",
+    "start": "node setup-credentials.js && node index.js",
+    "api": "node setup-credentials.js && node api.js",
     "oauth-setup": "node oauth-setup.js",
     "auth": "node oauth-simple.js",
     "setup-help": "node service-account-setup.js",
