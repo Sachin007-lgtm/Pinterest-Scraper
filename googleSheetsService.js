@@ -14,11 +14,29 @@ class GoogleSheetsService {
       // Try environment variables first (for Render deployment)
       if (process.env.GOOGLE_PRIVATE_KEY && process.env.GOOGLE_CLIENT_EMAIL) {
         console.log('Using environment variables for service account');
+        
+        // Handle private key - try multiple formats
+        let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+        
+        // Replace literal \n with actual newlines
+        if (privateKey.includes('\\n')) {
+          privateKey = privateKey.replace(/\\n/g, '\n');
+        }
+        
+        // If it's base64 encoded, decode it
+        if (!privateKey.includes('BEGIN PRIVATE KEY')) {
+          try {
+            privateKey = Buffer.from(privateKey, 'base64').toString('utf8');
+          } catch (e) {
+            // Not base64, continue
+          }
+        }
+        
         const auth = new google.auth.GoogleAuth({
           credentials: {
             type: 'service_account',
-            project_id: process.env.GOOGLE_PROJECT_ID,
-            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+            project_id: process.env.GOOGLE_PROJECT_ID || 'linked-in-480505',
+            private_key: privateKey,
             client_email: process.env.GOOGLE_CLIENT_EMAIL,
             client_id: process.env.GOOGLE_CLIENT_ID || '',
             auth_uri: 'https://accounts.google.com/o/oauth2/auth',
