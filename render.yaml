@@ -1,0 +1,14 @@
+# Render configuration
+services:
+  - type: web
+    name: amazon-scraper-api
+    env: node
+    buildCommand: npm install
+    startCommand: node api.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: true
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/google-chrome-stable

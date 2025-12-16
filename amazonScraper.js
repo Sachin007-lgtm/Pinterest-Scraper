@@ -25,14 +25,20 @@ class AmazonScraper {
 
   // Initialize browser with anti-detection settings
   async init() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    
     this.browser = await puppeteer.launch({
-      headless: false, // Keep visible to solve CAPTCHAs if needed
+      headless: isProduction ? 'new' : false, // Headless in production
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-blink-features=AutomationControlled',
         '--window-size=1920,1080',
-        '--lang=en-GB,en'
+        '--lang=en-GB,en',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-software-rasterizer'
       ]
     });
 
