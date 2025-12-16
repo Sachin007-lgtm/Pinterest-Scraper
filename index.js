@@ -21,8 +21,7 @@ class AmazonAutomation {
         await this.sheetsService.initWithOAuth();
       } else {
         console.log('Using Service Account authentication...');
-        const credentialsPath = process.env.GOOGLE_CREDENTIALS_PATH || './credentials.json';
-        await this.sheetsService.initWithServiceAccount(credentialsPath);
+        await this.sheetsService.initWithServiceAccount();
       }
 
       // Step 2: Read search URLs from Google Sheet
