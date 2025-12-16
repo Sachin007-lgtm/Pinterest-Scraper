@@ -14,7 +14,7 @@ class AmazonScraper {
   // Build Amazon affiliate link from ASIN
   buildAffiliateLink(asin) {
     if (!asin || !this.affiliateTag) return '';
-    return `https://www.amazon.com/dp/${asin}/?tag=${this.affiliateTag}`;
+    return `https://www.amazon.com/dp/${asin}?tag=${this.affiliateTag}`;
   }
 
   // Random delay to mimic human behavior
@@ -55,18 +55,15 @@ class AmazonScraper {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     );
 
-    // Set additional headers (UK location)
+    // Set additional headers
     await this.page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-GB,en;q=0.9',
+      'Accept-Language': 'en-US,en;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
       'Accept-Charset': 'UTF-8'
     });
 
-    // Set geolocation to UK (London)
-    await this.page.setGeolocation({ latitude: 51.5074, longitude: -0.1278 }); // London
-
-    console.log('Browser initialized with anti-detection measures (UK region)');
+    console.log('Browser initialized with anti-detection measures');
   }
 
   // Extract product data from Amazon search results
@@ -84,54 +81,14 @@ class AmazonScraper {
         });
       } else {
         // Better approach: Navigate to homepage first, then search
-        console.log('Navigating to Amazon UK homepage...');
+        console.log('Navigating to Amazon homepage...');
         
-        // Set cookies to force UK region
-        await this.page.setCookie({
-          name: 'i18n-prefs',
-          value: 'GBP',
-          domain: '.amazon.co.uk'
-        });
-        
-        await this.page.goto('https://www.amazon.co.uk', {
+        await this.page.goto('https://www.amazon.com', {
           waitUntil: 'domcontentloaded',
           timeout: 60000
         });
         
         await this.randomDelay(2000, 3000);
-
-        // Check if redirected to wrong site and switch to UK
-        const currentUrl = this.page.url();
-        if (currentUrl.includes('amazon.co.jp') || currentUrl.includes('amazon.com')) {
-          console.log('Detected wrong site, switching to UK...');
-          await this.page.goto('https://www.amazon.co.uk/?language=en_GB', {
-            waitUntil: 'domcontentloaded',
-            timeout: 60000
-          });
-          await this.randomDelay(2000, 3000);
-        }
-
-        // Check for country/region selector
-        try {
-          const countrySelector = await this.page.$('#nav-global-location-popover-link, #glow-ingress-line2');
-          if (countrySelector) {
-            const locationText = await this.page.evaluate(el => el.textContent, countrySelector);
-            if (locationText && !locationText.includes('United Kingdom')) {
-              console.log('Changing delivery location to United Kingdom...');
-              await countrySelector.click();
-              await this.randomDelay(1000, 2000);
-              
-              // Look for UK option and click it
-              const ukOption = await this.page.$('button[data-a-modal-link-text="United Kingdom"]');
-              if (ukOption) {
-                await ukOption.click();
-                await this.randomDelay(2000, 3000);
-              }
-            }
-          }
-        } catch (e) {
-          // Skip if location change fails
-        }
 
         // Check for bot detection
         const continueButton = await this.page.$('button[alt="Continue shopping"]');
