@@ -13,11 +13,41 @@ app.use(express.urlencoded({ extended: true }));
 const jobs = new Map();
 let jobIdCounter = 1;
 
+// Rate limiting - track requests
+const requestTracker = new Map();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const MAX_REQUESTS = 10; // 10 requests per minute
+
+// Rate limiting middleware
+app.use((req, res, next) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  
+  if (!requestTracker.has(ip)) {
+    requestTracker.set(ip, []);
+  }
+  
+  const requests = requestTracker.get(ip).filter(time => now - time < RATE_LIMIT_WINDOW);
+  
+  if (requests.length >= MAX_REQUESTS) {
+    return res.status(429).json({
+      error: 'Too many requests',
+      message: `Rate limit: ${MAX_REQUESTS} requests per minute. Please wait.`,
+      retryAfter: Math.ceil((requests[0] + RATE_LIMIT_WINDOW - now) / 1000)
+    });
+  }
+  
+  requests.push(now);
+  requestTracker.set(ip, requests);
+  next();
+});
+
 // CORS middleware
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, User-Agent');
+  res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
   next();
 });
 
