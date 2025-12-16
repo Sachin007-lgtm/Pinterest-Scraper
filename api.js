@@ -27,12 +27,53 @@ app.get('/', (req, res) => {
     status: 'running',
     message: 'Amazon Scraper API',
     endpoints: {
+      'POST /run': 'Simple endpoint - Scrape from Google Sheets',
       'POST /api/scrape': 'Start a new scraping job',
       'POST /api/scrape/urls': 'Scrape specific URLs',
       'GET /api/jobs/:id': 'Get job status',
       'GET /api/jobs': 'List all jobs'
     }
   });
+});
+
+// Simple /run endpoint for n8n
+app.post('/run', async (req, res) => {
+  const jobId = jobIdCounter++;
+  
+  jobs.set(jobId, {
+    id: jobId,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    products: [],
+    error: null
+  });
+
+  res.json({
+    jobId,
+    status: 'started',
+    message: 'Scraping from Google Sheets started',
+    checkStatus: `https://pinterest-scraper-1.onrender.com/api/jobs/${jobId}`,
+    getProducts: `https://pinterest-scraper-1.onrender.com/api/jobs/${jobId}/products`
+  });
+
+  // Run scraping in background
+  const automation = new AmazonAutomation();
+  
+  try {
+    await automation.run();
+    jobs.set(jobId, {
+      ...jobs.get(jobId),
+      status: 'completed',
+      completedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    jobs.set(jobId, {
+      ...jobs.get(jobId),
+      status: 'failed',
+      error: error.message,
+      completedAt: new Date().toISOString()
+    });
+  }
 });
 
 // Start scraping from Google Sheets
