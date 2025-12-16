@@ -32,7 +32,15 @@ class AmazonScraper {
       return targetUrl;
     }
     
-    return `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}&country_code=us&render=true`;
+    const scraperUrl =
+      `https://api.scraperapi.com/?` +
+      `api_key=${apiKey}` +
+      `&url=${encodeURIComponent(targetUrl)}` +
+      `&country_code=us` +
+      `&render=true` +
+      `&premium=true`;
+    
+    return scraperUrl;
   }
 
   // Validate HTML response
@@ -40,9 +48,9 @@ class AmazonScraper {
     if (
       html.includes('cf-challenge') ||
       html.includes('Enable JavaScript') ||
-      html.length < 5000
+      html.length < 8000
     ) {
-      throw new Error('🚫 Blocked or invalid HTML detected (Cloudflare/Bot check)');
+      throw new Error('Cloudflare block detected');
     }
     return true;
   }
