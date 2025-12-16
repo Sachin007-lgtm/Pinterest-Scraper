@@ -18,9 +18,13 @@
     "express": "^4.22.1",
     "googleapis": "^128.0.0",
     "open": "^8.4.2",
-    "puppeteer": "^21.6.1",
+    "puppeteer-core": "^21.6.1",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"  },
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "config": {
+    "puppeteer_skip_chromium_download": true
+  },
   "engines": {
     "node": ">=18.0.0"  }
 }

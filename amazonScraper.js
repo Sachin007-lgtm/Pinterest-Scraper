@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer-extra');
+const puppeteerCore = require('puppeteer-core');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 
 // Add stealth plugin to avoid detection
