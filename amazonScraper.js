@@ -24,6 +24,29 @@ class AmazonScraper {
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
+  // Build ScraperAPI URL
+  buildScraperApiUrl(targetUrl) {
+    const apiKey = process.env.SCRAPER_API_KEY;
+    if (!apiKey) {
+      console.warn('⚠️  SCRAPER_API_KEY not set, using direct connection (may get blocked)');
+      return targetUrl;
+    }
+    
+    return `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(targetUrl)}&country_code=us&render=true`;
+  }
+
+  // Validate HTML response
+  validateHtml(html) {
+    if (
+      html.includes('cf-challenge') ||
+      html.includes('Enable JavaScript') ||
+      html.length < 5000
+    ) {
+      throw new Error('🚫 Blocked or invalid HTML detected (Cloudflare/Bot check)');
+    }
+    return true;
+  }
+
   // Initialize browser with anti-detection settings
   async init() {
     const isProduction = process.env.NODE_ENV === 'production';
@@ -75,57 +98,39 @@ class AmazonScraper {
       const searchTerm = urlObj.searchParams.get('k') || urlObj.searchParams.get('field-keywords');
 
       if (!searchTerm) {
-        console.log('Direct URL navigation...');
-        await this.page.goto(searchUrl, {
+        console.log('Direct URL navigation via ScraperAPI...');
+        const scraperUrl = this.buildScraperApiUrl(searchUrl);
+        await this.page.goto(scraperUrl, {
           waitUntil: 'domcontentloaded',
-          timeout: 60000
+          timeout: 90000
         });
+        
+        // Rate limiting: 8 seconds between requests
+        await new Promise(resolve => setTimeout(resolve, 8000));
+        
+        // Validate response
+        const html = await this.page.content();
+        this.validateHtml(html);
       } else {
-        // Better approach: Navigate to homepage first, then search
-        console.log('Navigating to Amazon homepage...');
+        // Navigate to Amazon search via ScraperAPI
+        console.log('Navigating to Amazon search via ScraperAPI...');
+        const scraperUrl = this.buildScraperApiUrl(searchUrl);
         
-        await this.page.goto('https://www.amazon.com', {
+        await this.page.goto(scraperUrl, {
           waitUntil: 'domcontentloaded',
-          timeout: 60000
+          timeout: 90000
         });
         
-        await this.randomDelay(2000, 3000);
-
-        // Check for bot detection
-        const continueButton = await this.page.$('button[alt="Continue shopping"]');
-        if (continueButton) {
-          console.log('Bot check detected. Clicking continue...');
-          await continueButton.click();
-          await this.page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-          await this.randomDelay(3000, 4000);
-        }
-
-        // Check for CAPTCHA
-        const bodyText = await this.page.evaluate(() => document.body.innerText);
-        if (bodyText.includes('Type the characters you see in this image')) {
-          console.log('⚠️  CAPTCHA DETECTED! Please solve it in the browser window.');
-          console.log('Waiting 60 seconds...');
-          await new Promise(r => setTimeout(r, 60000));
-        }
-
-        // Type in search box (more human-like)
-        console.log(`Searching for: ${searchTerm}`);
-        await this.page.waitForSelector('#twotabsearchtextbox', { timeout: 15000 });
-        await this.page.type('#twotabsearchtextbox', searchTerm, { delay: 100 });
+        // Rate limiting: 8 seconds between requests
+        await new Promise(resolve => setTimeout(resolve, 8000));
         
-        await this.randomDelay(500, 1000);
-
-        // Click search button
-        await this.page.click('#nav-search-submit-button');
-        
-        try {
-          await this.page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 });
-        } catch (e) {
-          console.log('Navigation timeout, continuing anyway...');
-        }
+        // Validate response
+        const html = await this.page.content();
+        this.validateHtml(html);
       }
 
-      await this.randomDelay(2000, 4000);
+      console.log('✅ ScraperAPI bypassed Cloudflare successfully');
+      await this.randomDelay(2000, 3000);
 
       // Wait for products to load with fallback
       try {
