@@ -19,12 +19,10 @@ class AmazonAutomation {
       if (process.env.GOOGLE_REFRESH_TOKEN) {
         console.log('Using OAuth 2.0 authentication...');
         await this.sheetsService.initWithOAuth();
-      } else if (process.env.GOOGLE_CREDENTIALS_PATH) {
+      } else {
         console.log('Using Service Account authentication...');
         const credentialsPath = process.env.GOOGLE_CREDENTIALS_PATH || './credentials.json';
         await this.sheetsService.initWithServiceAccount(credentialsPath);
-      } else {
-        throw new Error('No authentication credentials found. Please set up OAuth or Service Account in .env file.');
       }
 
       // Step 2: Read search URLs from Google Sheet
