@@ -12,6 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 // Store scraping jobs
 const jobs = new Map();
 let jobIdCounter = 1;
+let isJobRunning = false; // Track if a job is currently running
 
 // Rate limiting - track requests
 const requestTracker = new Map();
@@ -56,19 +57,96 @@ app.get('/', (req, res) => {
   res.json({
     status: 'running',
     message: 'Amazon Scraper API',
+    isJobRunning: isJobRunning,
     endpoints: {
+      'POST /trigger': 'Start scraping (recommended for n8n)',
       'POST /run': 'Simple endpoint - Scrape from Google Sheets',
-      'POST /api/scrape': 'Start a new scraping job',
-      'POST /api/scrape/urls': 'Scrape specific URLs',
+      'GET /status': 'Check if scraping job is running',
       'GET /api/jobs/:id': 'Get job status',
       'GET /api/jobs': 'List all jobs'
     }
   });
 });
 
+// New /trigger endpoint - prevents concurrent jobs
+app.post('/trigger', async (req, res) => {
+  // Check if a job is already running
+  if (isJobRunning) {
+    return res.status(429).json({
+      error: 'Scraper is busy',
+      message: 'A scraping job is already running. Please try again in a few minutes.',
+      isJobRunning: true
+    });
+  }
+
+  const jobId = jobIdCounter++;
+  isJobRunning = true;
+  
+  jobs.set(jobId, {
+    id: jobId,
+    status: 'running',
+    startedAt: new Date().toISOString(),
+    error: null
+  });
+
+  // Send immediate response
+  res.json({
+    success: true,
+    jobId,
+    message: 'Scraping started',
+    isJobRunning: true
+  });
+
+  // Run scraping in background
+  const automation = new AmazonAutomation();
+  
+  try {
+    console.log(`[Job ${jobId}] Starting scraping job...`);
+    await automation.run();
+    
+    jobs.set(jobId, {
+      ...jobs.get(jobId),
+      status: 'completed',
+      completedAt: new Date().toISOString()
+    });
+    console.log(`[Job ${jobId}] Completed successfully`);
+  } catch (error) {
+    jobs.set(jobId, {
+      ...jobs.get(jobId),
+      status: 'failed',
+      error: error.message,
+      completedAt: new Date().toISOString()
+    });
+    console.error(`[Job ${jobId}] Failed:`, error.message);
+  } finally {
+    isJobRunning = false;
+    console.log(`[Job ${jobId}] Job finished, ready for next request`);
+  }
+});
+
+// Status check endpoint
+app.get('/status', (req, res) => {
+  const runningJob = Array.from(jobs.values()).find(j => j.status === 'running');
+  res.json({
+    isJobRunning: isJobRunning,
+    currentJob: runningJob || null,
+    totalJobs: jobs.size
+  });
+});
+
 // Simple /run endpoint for n8n
 app.post('/run', async (req, res) => {
+  // Check if a job is already running
+  if (isJobRunning) {
+    return res.status(429).json({
+      error: 'Job already running',
+      message: 'Another scraping job is currently in progress. Please wait for it to complete.',
+      currentJob: Array.from(jobs.values()).find(j => j.status === 'running')
+    });
+  }
+
   const jobId = jobIdCounter++;
+  isJobRunning = true;
   
   jobs.set(jobId, {
     id: jobId,
@@ -103,6 +181,8 @@ app.post('/run', async (req, res) => {
       error: error.message,
       completedAt: new Date().toISOString()
     });
+  } finally {
+    isJobRunning = false; // Release the lock
   }
 });
 
