@@ -14,17 +14,14 @@
   "license": "ISC",
   "description": "Amazon product scraper with Google Sheets integration",
   "dependencies": {
+    "axios": "^1.13.2",
+    "cheerio": "^1.1.0",
     "dotenv": "^16.3.1",
     "express": "^4.22.1",
     "googleapis": "^128.0.0",
-    "open": "^8.4.2",
-    "puppeteer-core": "^21.6.1",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
-  },
-  "config": {
-    "puppeteer_skip_chromium_download": true
+    "open": "^8.4.2"
   },
   "engines": {
-    "node": ">=18.0.0"  }
+    "node": ">=18.0.0"
+  }
 }

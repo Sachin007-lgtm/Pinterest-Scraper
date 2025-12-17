@@ -1,14 +1,9 @@
-const puppeteer = require('puppeteer-extra');
-const puppeteerCore = require('puppeteer-core');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-
-// Add stealth plugin to avoid detection
-puppeteer.use(StealthPlugin());
+const axios = require('axios');
+const cheerio = require('cheerio');
+require('dotenv').config();
 
 class AmazonScraper {
   constructor() {
-    this.browser = null;
-    this.page = null;
     this.affiliateTag = process.env.AMAZON_AFFILIATE_TAG || '';
   }
 
@@ -19,7 +14,7 @@ class AmazonScraper {
   }
 
   // Random delay to mimic human behavior
-  async randomDelay(min = 1000, max = 3000) {
+  async randomDelay(min = 8000, max = 10000) {
     const delay = Math.floor(Math.random() * (max - min + 1)) + min;
     await new Promise(resolve => setTimeout(resolve, delay));
   }
@@ -28,8 +23,7 @@ class AmazonScraper {
   buildScraperApiUrl(targetUrl) {
     const apiKey = process.env.SCRAPER_API_KEY;
     if (!apiKey) {
-      console.warn('⚠️  SCRAPER_API_KEY not set, using direct connection (may get blocked)');
-      return targetUrl;
+      throw new Error('SCRAPER_API_KEY is required');
     }
     
     const scraperUrl =
@@ -55,300 +49,127 @@ class AmazonScraper {
     return true;
   }
 
-  // Initialize browser with anti-detection settings
+  // Initialize (no browser needed)
   async init() {
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    this.browser = await puppeteer.launch({
-      headless: isProduction ? 'new' : false, // Headless in production
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-blink-features=AutomationControlled',
-        '--window-size=1920,1080',
-        '--lang=en-GB,en',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-software-rasterizer'
-      ]
-    });
-
-    this.page = await this.browser.newPage();
-    
-    // Set viewport
-    await this.page.setViewport({
-      width: 1920,
-      height: 1080
-    });
-
-    // Set consistent realistic user agent
-    await this.page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
-
-    // Set additional headers
-    await this.page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Charset': 'UTF-8'
-    });
-
-    console.log('Browser initialized with anti-detection measures');
+    console.log('✅ ScraperAPI client initialized');
   }
 
   // Extract product data from Amazon search results
   async scrapeSearchResults(searchUrl) {
     try {
-      // Extract search term from URL
-      const urlObj = new URL(searchUrl);
-      const searchTerm = urlObj.searchParams.get('k') || urlObj.searchParams.get('field-keywords');
+      console.log(`🔍 Scraping via ScraperAPI: ${searchUrl}`);
+      
+      const scraperUrl = this.buildScraperApiUrl(searchUrl);
+      
+      // Fetch via ScraperAPI
+      const response = await axios.get(scraperUrl, {
+        timeout: 90000,
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+      });
 
-      if (!searchTerm) {
-        console.log('Direct URL navigation via ScraperAPI...');
-        const scraperUrl = this.buildScraperApiUrl(searchUrl);
-        await this.page.goto(scraperUrl, {
-          waitUntil: 'domcontentloaded',
-          timeout: 90000
-        });
-        
-        // Rate limiting: 8 seconds between requests
-        await new Promise(resolve => setTimeout(resolve, 8000));
-        
-        // Validate response
-        const html = await this.page.content();
-        this.validateHtml(html);
-      } else {
-        // Navigate to Amazon search via ScraperAPI
-        console.log('Navigating to Amazon search via ScraperAPI...');
-        const scraperUrl = this.buildScraperApiUrl(searchUrl);
-        
-        await this.page.goto(scraperUrl, {
-          waitUntil: 'domcontentloaded',
-          timeout: 90000
-        });
-        
-        // Rate limiting: 8 seconds between requests
-        await new Promise(resolve => setTimeout(resolve, 8000));
-        
-        // Validate response
-        const html = await this.page.content();
-        this.validateHtml(html);
-      }
-
+      const html = response.data;
+      
+      // Validate response
+      this.validateHtml(html);
       console.log('✅ ScraperAPI bypassed Cloudflare successfully');
-      await this.randomDelay(2000, 3000);
 
-      // Wait for products to load with fallback
-      try {
-        await this.page.waitForSelector('[data-component-type="s-search-result"]', {
-          timeout: 10000
-        });
-      } catch (e) {
-        // Fallback selector
-        await this.page.waitForSelector('.s-result-item', { timeout: 10000 });
-      }
+      // Parse with Cheerio
+      const $ = cheerio.load(html);
+      const products = [];
 
-      console.log('Products loaded, extracting data...');
+      // Extract products using multiple selector strategies
+      $('[data-component-type="s-search-result"], .s-result-item').each((index, element) => {
+        try {
+          const $item = $(element);
+          
+          // Skip sponsored or invalid items
+          const dataAsin = $item.attr('data-asin');
+          if (!dataAsin || dataAsin === '') return;
 
-      // Take screenshot for debugging
-      await this.page.screenshot({ path: 'search_results.png' });
+          // Product name
+          const nameElement = $item.find('h2 a span, h2 .a-text-normal');
+          const productName = nameElement.first().text().trim();
+          if (!productName) return;
 
-      // Extract product links first (more reliable)
-      const productLinks = await this.page.evaluate(() => {
-        let links = [];
-        // Try primary selector
-        const elements = document.querySelectorAll('.s-result-item h2 a');
-        if (elements.length > 0) {
-          links = Array.from(elements).map(link => ({
-            url: link.href,
-            title: link.innerText.trim()
-          }));
-        } else {
-          // Try fallback selector
-          const fallback = document.querySelectorAll('a.a-link-normal.s-underline-text');
-          links = Array.from(fallback).map(link => ({
-            url: link.href,
-            title: link.innerText.trim()
-          }));
-        }
-        return links.filter(item => item.url.includes('/dp/') && !item.url.includes('/slredirect/'));
-      });
-
-      console.log(`Found ${productLinks.length} product links`);
-
-      // Extract data from search results using multiple selector strategies
-      const products = await this.page.evaluate(() => {
-        const results = [];
-        
-        // Strategy 1: Try data-component-type selector
-        let productElements = document.querySelectorAll('[data-component-type="s-search-result"]');
-        
-        // Strategy 2: Fallback to s-result-item
-        if (productElements.length === 0) {
-          productElements = document.querySelectorAll('.s-result-item[data-asin]:not([data-asin=""])');
-        }
-
-        productElements.forEach((element) => {
-          try {
-            // Get ASIN first
-            const asin = element.getAttribute('data-asin') || '';
-            if (!asin) return; // Skip if no ASIN
-
-            // Product name - try multiple selectors
-            let name = '';
-            const nameSelectors = [
-              'h2 a span',
-              'h2 span',
-              '.s-title-instructions-style h2 span',
-              '.a-size-medium.a-text-normal'
-            ];
-            for (const selector of nameSelectors) {
-              const el = element.querySelector(selector);
-              if (el && el.textContent.trim()) {
-                name = el.textContent.trim();
-                break;
-              }
-            }
-
-            // Product link
-            const linkElement = element.querySelector('h2 a, .s-title-instructions-style a');
-            const link = linkElement ? linkElement.getAttribute('href') : '';
-
-            // Product image
-            const imgElement = element.querySelector('img.s-image, .s-image img');
-            const image = imgElement ? (imgElement.getAttribute('src') || imgElement.getAttribute('data-src')) : '';
-
-            // Product price
-            const priceElement = element.querySelector('.a-price .a-offscreen, .a-price-whole');
-            const price = priceElement ? priceElement.textContent.trim() : 'N/A';
-
-            // Product rating
-            const ratingElement = element.querySelector('.a-icon-alt, [aria-label*="out of"]');
-            const rating = ratingElement ? (ratingElement.textContent || ratingElement.getAttribute('aria-label')).trim() : 'N/A';
-
-            // Number of reviews
-            const reviewsElement = element.querySelector('.a-size-base.s-underline-text, [aria-label*="stars"] + span');
-            const reviews = reviewsElement ? reviewsElement.textContent.trim() : 'N/A';
-
-            if (name && link) {
-              results.push({
-                name,
-                link: link.startsWith('http') ? link : 'https://www.amazon.com' + link,
-                image,
-                price,
-                rating,
-                reviews,
-                asin,
-                affiliate_link: asin // Will be built later with affiliateTag
-              });
-            }
-          } catch (err) {
-            // Silent fail for individual items
+          // Product URL and ASIN
+          const productUrl = $item.find('h2 a').attr('href');
+          let asin = dataAsin;
+          
+          if (productUrl && productUrl.includes('/dp/')) {
+            const asinMatch = productUrl.match(/\/dp\/([A-Z0-9]{10})/);
+            if (asinMatch) asin = asinMatch[1];
           }
-        });
 
-        return results;
-      });
+          // Product image
+          const imageUrl = $item.find('img.s-image').attr('src') || '';
 
-      // Add affiliate links to all products
-      products.forEach(product => {
-        if (product.asin) {
-          product.affiliate_link = this.buildAffiliateLink(product.asin);
+          // Price
+          let price = '';
+          const priceWhole = $item.find('.a-price-whole').first().text().trim();
+          const priceFraction = $item.find('.a-price-fraction').first().text().trim();
+          if (priceWhole) {
+            price = `$${priceWhole}${priceFraction}`;
+          }
+
+          // Rating
+          let rating = '';
+          const ratingText = $item.find('.a-icon-star-small .a-icon-alt, .a-icon-star .a-icon-alt').first().text();
+          if (ratingText) {
+            const ratingMatch = ratingText.match(/(\d+\.?\d*)/);
+            if (ratingMatch) rating = ratingMatch[1];
+          }
+
+          // Review count
+          let reviews = '';
+          const reviewText = $item.find('[href*="#customerReviews"]').first().text().trim();
+          if (reviewText) {
+            const reviewMatch = reviewText.match(/[\d,]+/);
+            if (reviewMatch) reviews = reviewMatch[0].replace(/,/g, '');
+          }
+
+          // Build affiliate link
+          const affiliateLink = this.buildAffiliateLink(asin);
+          const fullProductUrl = productUrl ? 
+            (productUrl.startsWith('http') ? productUrl : `https://www.amazon.com${productUrl}`) : 
+            `https://www.amazon.com/dp/${asin}`;
+
+          products.push({
+            productName,
+            description: '', // Not available in search results
+            images: imageUrl,
+            price: price || 'N/A',
+            rating: rating || 'N/A',
+            reviews: reviews || '0',
+            asin,
+            affiliateLink,
+            productLink: fullProductUrl,
+            availability: 'In Stock',
+            scrapedAt: new Date().toISOString()
+          });
+
+        } catch (itemError) {
+          console.warn(`Error parsing product item: ${itemError.message}`);
         }
       });
 
-      console.log(`Extracted ${products.length} products`);
+      console.log(`✅ Extracted ${products.length} products`);
+
+      // Rate limiting: 8-10 seconds between requests
+      await this.randomDelay();
+
       return products;
 
     } catch (error) {
-      console.error('Error scraping search results:', error);
+      console.error('Scraping error:', error.message);
       throw error;
     }
   }
 
-  // Get detailed product information from product page
-  async scrapeProductDetails(productUrl) {
-    try {
-      console.log(`Fetching product details from: ${productUrl}`);
-      
-      await this.page.goto(productUrl, {
-        waitUntil: 'networkidle2',
-        timeout: 60000
-      });
-
-      await this.randomDelay(2000, 4000);
-
-      const productDetails = await this.page.evaluate(() => {
-        // Product title
-        const titleElement = document.querySelector('#productTitle');
-        const title = titleElement ? titleElement.textContent.trim() : '';
-
-        // Product description (feature bullets)
-        const descriptionElements = document.querySelectorAll('#feature-bullets ul li span.a-list-item');
-        const description = Array.from(descriptionElements)
-          .map(el => el.textContent.trim())
-          .filter(text => text.length > 0)
-          .join(' | ');
-
-        // Product images
-        const imageElements = document.querySelectorAll('#altImages img');
-        const images = Array.from(imageElements)
-          .map(img => img.getAttribute('src'))
-          .filter(src => src && !src.includes('transparent-pixel'))
-          .slice(0, 5); // Get first 5 images
-
-        // Main image
-        const mainImageElement = document.querySelector('#landingImage');
-        const mainImage = mainImageElement ? mainImageElement.getAttribute('src') : '';
-        
-        if (mainImage && !images.includes(mainImage)) {
-          images.unshift(mainImage);
-        }
-
-        // Price
-        const priceElement = document.querySelector('.a-price .a-offscreen');
-        const price = priceElement ? priceElement.textContent.trim() : 'N/A';
-
-        // Rating
-        const ratingElement = document.querySelector('#acrPopover');
-        const rating = ratingElement ? ratingElement.getAttribute('title') : 'N/A';
-
-        // Reviews count
-        const reviewsElement = document.querySelector('#acrCustomerReviewText');
-        const reviews = reviewsElement ? reviewsElement.textContent.trim() : 'N/A';
-
-        // Availability
-        const availabilityElement = document.querySelector('#availability span');
-        const availability = availabilityElement ? availabilityElement.textContent.trim() : 'N/A';
-
-        return {
-          title,
-          description,
-          images,
-          price,
-          rating,
-          reviews,
-          availability
-        };
-      });
-
-      console.log('Product details extracted successfully');
-      return productDetails;
-
-    } catch (error) {
-      console.error('Error scraping product details:', error);
-      throw error;
-    }
-  }
-
-  // Close browser
+  // Close (no browser to close)
   async close() {
-    if (this.browser) {
-      await this.browser.close();
-      console.log('Browser closed');
-    }
+    console.log('✅ Scraper closed');
   }
 }
 
