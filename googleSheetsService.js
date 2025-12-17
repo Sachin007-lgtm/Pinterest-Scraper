@@ -112,17 +112,17 @@ class GoogleSheetsService {
 
       // Prepare data rows - MUST match header order!
       const rows = products.map(product => [
-        product.name || product.title || '',
+        product.productName || product.name || product.title || '',
         product.description || '',
-        Array.isArray(product.images) ? product.images.join(', ') : product.image || '',
+        Array.isArray(product.images) ? product.images.join(', ') : (product.images || product.image || ''),
         product.price || '',
         product.rating || '',
         product.reviews || '',
         product.asin || '',
-        product.affiliate_link || '',
-        product.link || '',
+        product.affiliateLink || product.affiliate_link || '',
+        product.productLink || product.link || '',
         product.availability || '',
-        new Date().toISOString()
+        product.scrapedAt || new Date().toISOString()
       ]);
 
       // Combine headers and data
