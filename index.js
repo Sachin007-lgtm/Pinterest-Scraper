@@ -69,9 +69,10 @@ class AmazonAutomation {
           }
 
           // Optional: Get detailed info for first few products
+          // Note: Product detail scraping is currently disabled (DETAIL_LIMIT=0)
           const detailLimit = parseInt(process.env.DETAIL_LIMIT) || 0;
           
-          if (detailLimit > 0) {
+          if (detailLimit > 0 && typeof this.scraper.scrapeProductDetails === 'function') {
             console.log(`Getting detailed info for top ${Math.min(detailLimit, products.length)} products...`);
             
             for (let j = 0; j < Math.min(detailLimit, products.length); j++) {
