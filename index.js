@@ -89,9 +89,9 @@ class AmazonAutomation {
             }
           }
 
-          // Random delay between URLs to avoid detection
+          // Random delay between URLs to avoid rate limits
           if (i < searchUrls.length - 1) {
-            const delay = Math.floor(Math.random() * 3000) + 5000; // 5-8 seconds
+            const delay = Math.floor(Math.random() * 5000) + 12000; // 12-17 seconds
             console.log(`Waiting ${(delay / 1000).toFixed(1)}s before next URL...`);
             await new Promise(resolve => setTimeout(resolve, delay));
           }
