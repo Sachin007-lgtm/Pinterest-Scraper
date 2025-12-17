@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Scraper API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .endpoint {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .response {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .loading {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .label {
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Amazon Scraper API Test</h1>
+        
+        <div class="endpoint">
+            <div class="label">POST /run</div>
+            <p>Starts scraping from Google Sheets (with PRODUCT_LIMIT=3)</p>
+            <button onclick="testRun()">Test /run</button>
+            <div id="runResponse"></div>
+        </div>
+
+        <div class="endpoint">
+            <div class="label">GET /api/jobs</div>
+            <p>List all jobs</p>
+            <button onclick="listJobs()">List Jobs</button>
+            <div id="jobsResponse"></div>
+        </div>
+
+        <div class="endpoint">
+            <div class="label">GET /api/jobs/:id</div>
+            <p>Get job status (enter job ID below)</p>
+            <input type="number" id="jobId" placeholder="Job ID" style="padding: 8px; margin-right: 10px;">
+            <button onclick="getJobStatus()">Get Status</button>
+            <div id="statusResponse"></div>
+        </div>
+
+        <div class="endpoint">
+            <div class="label">GET /api/jobs/:id/products</div>
+            <p>Get job products (enter job ID below)</p>
+            <input type="number" id="jobIdProducts" placeholder="Job ID" style="padding: 8px; margin-right: 10px;">
+            <button onclick="getJobProducts()">Get Products</button>
+            <div id="productsResponse"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+
+        async function testRun() {
+            const btn = event.target;
+            const responseDiv = document.getElementById('runResponse');
+            
+            btn.disabled = true;
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = '⏳ Starting scraping job...';
+
+            try {
+                const response = await fetch(`${API_URL}/run`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                responseDiv.className = response.ok ? 'response' : 'response error';
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok && data.jobId) {
+                    // Auto-populate job ID fields
+                    document.getElementById('jobId').value = data.jobId;
+                    document.getElementById('jobIdProducts').value = data.jobId;
+                }
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}\n\nMake sure the API server is running:\nnpm run api`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function listJobs() {
+            const btn = event.target;
+            const responseDiv = document.getElementById('jobsResponse');
+            
+            btn.disabled = true;
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = '⏳ Fetching jobs...';
+
+            try {
+                const response = await fetch(`${API_URL}/api/jobs`);
+                const data = await response.json();
+                responseDiv.className = response.ok ? 'response' : 'response error';
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function getJobStatus() {
+            const btn = event.target;
+            const jobId = document.getElementById('jobId').value;
+            const responseDiv = document.getElementById('statusResponse');
+
+            if (!jobId) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = 'Please enter a Job ID';
+                return;
+            }
+            
+            btn.disabled = true;
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = '⏳ Fetching job status...';
+
+            try {
+                const response = await fetch(`${API_URL}/api/jobs/${jobId}`);
+                const data = await response.json();
+                responseDiv.className = response.ok ? 'response' : 'response error';
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function getJobProducts() {
+            const btn = event.target;
+            const jobId = document.getElementById('jobIdProducts').value;
+            const responseDiv = document.getElementById('productsResponse');
+
+            if (!jobId) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = 'Please enter a Job ID';
+                return;
+            }
+            
+            btn.disabled = true;
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = '⏳ Fetching products...';
+
+            try {
+                const response = await fetch(`${API_URL}/api/jobs/${jobId}/products`);
+                const data = await response.json();
+                responseDiv.className = response.ok ? 'response' : 'response error';
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
