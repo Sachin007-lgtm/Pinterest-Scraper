@@ -107,7 +107,8 @@ class GoogleSheetsService {
         'Affiliate Link',
         'Product Link',
         'Availability',
-        'Scraped At'
+        'Scraped At',
+        'Processed'
       ];
 
       // Prepare data rows - MUST match header order!
@@ -122,7 +123,8 @@ class GoogleSheetsService {
         product.affiliateLink || product.affiliate_link || '',
         product.productLink || product.link || '',
         product.availability || '',
-        product.scrapedAt || new Date().toISOString()
+        product.scrapedAt || new Date().toISOString(),
+        'FALSE'
       ]);
 
       // Combine headers and data
